@@ -13,4 +13,11 @@ public interface HazelcastProvider {
     return () -> HazelcastClient.newHazelcastClient(clientConfig);
   }
 
+  static HazelcastProvider defaultClient() {
+    ClientConfig clientConfig = new ClientConfig();
+    clientConfig.setProperty("hazelcast.logging.type", "slf4j");
+    clientConfig.getNetworkConfig().addAddress("127.0.0.1:5701");
+    return () -> HazelcastClient.newHazelcastClient(clientConfig);
+  }
+
 }

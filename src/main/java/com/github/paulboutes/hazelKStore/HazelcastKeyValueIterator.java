@@ -1,26 +1,46 @@
 package com.github.paulboutes.hazelKStore;
 
-import com.hazelcast.core.IMap;
+import java.util.Iterator;
+import java.util.Map.Entry;
+import java.util.NoSuchElementException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-import java.util.Iterator;
+public class HazelcastKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
 
-public class HazelcastKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
+  private final Iterator<Entry<byte[], byte[]>> iterator;
+  private final AtomicBoolean closed = new AtomicBoolean();
+  private boolean isDone = false;
 
-  @Override public void close() {
-    // do nothing
+  public HazelcastKeyValueIterator(Iterator<Entry<byte[], byte[]>> iterator) {
+    this.iterator = iterator;
   }
 
-  @Override public K peekNextKey() {
+  @Override
+  public void close() {
+    closed.set(true);
+    isDone = true;
+  }
+
+  @Override
+  public Bytes peekNextKey() {
     throw new UnsupportedOperationException("peekNextKey() is not supported");
   }
 
-  @Override public boolean hasNext() {
-    return false;
+  @Override
+  public boolean hasNext() {
+    return iterator.hasNext();
   }
 
-  @Override public KeyValue<K, V> next() {
-    return null;
+  @Override
+  public KeyValue<Bytes, byte[]> next() {
+    if (!hasNext()) {
+      throw new NoSuchElementException("no more element");
+    }
+    final Entry<byte[], byte[]> next = iterator.next();
+    final Bytes parsedKey = Bytes.wrap(next.getKey());
+    return KeyValue.pair(parsedKey, next.getValue());
   }
 }
