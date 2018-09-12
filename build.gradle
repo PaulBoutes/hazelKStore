@@ -1,0 +1,41 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'org.junit.platform:junit-platform-gradle-plugin:1.1.0'
+    }
+
+}
+
+plugins {
+    id 'java'
+}
+
+apply plugin: 'org.junit.platform.gradle.plugin'
+
+group 'com.github.paulboutes'
+version '1.0.0'
+
+sourceCompatibility = 1.8
+
+ext.kafkaVersion = '1.1.1'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+
+    implementation group: 'org.apache.kafka', name: 'kafka-streams', version: kafkaVersion
+    implementation 'com.hazelcast:hazelcast:3.10.4'
+    implementation 'com.hazelcast:hazelcast-client:3.10.4'
+    implementation group: 'org.slf4j', name: 'slf4j-simple', version: '1.7.25'
+
+
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.1.0'
+    testImplementation 'org.assertj:assertj-core:3.9.1'
+    testRuntimeOnly'org.junit.jupiter:junit-jupiter-engine:5.1.0'
+    testImplementation 'org.mockito:mockito-core:2.22.0'
+
+}
