@@ -5,6 +5,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
@@ -13,6 +14,8 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
 
 public class Test {
@@ -61,10 +64,19 @@ public class Test {
 
     KafkaStreams streams = new KafkaStreams(builder.build(), new StreamsConfig(props));
 
+    streams.setStateListener((newState, oldState) -> {
+      if (newState.equals(State.RUNNING) && oldState.equals(State.REBALANCING)) {
+        final ReadOnlyKeyValueStore<String, Integer> readOnlyKeyValueStore = streams
+            .store("aggre", QueryableStoreTypes.keyValueStore());
+        readOnlyKeyValueStore.all().forEachRemaining(kv -> System.out.println("fetch from interactive ("+kv.key+" -> "+kv.value+")"));
+      }
+    });
+
     streams.cleanUp();
     streams.start();
 
     Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
+
 
   }
 
