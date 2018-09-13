@@ -1,5 +1,6 @@
-package com.github.paulboutes.hazelKStore;
+package com.github.paulboutes.hazelKStore.state.internals;
 
+import com.github.paulboutes.hazelKStore.hazelcast.HazelcastProvider;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;

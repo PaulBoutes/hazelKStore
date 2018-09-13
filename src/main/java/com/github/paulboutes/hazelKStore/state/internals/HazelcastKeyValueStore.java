@@ -1,13 +1,18 @@
-package com.github.paulboutes.hazelKStore;
+package com.github.paulboutes.hazelKStore.state.internals;
 
 import static java.util.stream.Collectors.toMap;
 
+import com.github.paulboutes.hazelKStore.hazelcast.HazelcastProvider;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.IMap;
 import com.hazelcast.query.Predicate;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map.Entry;
+import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
@@ -18,7 +23,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
-public class HazelcastKeyValueStore implements KeyValueStore<Bytes, byte[]> {
+class HazelcastKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
   private final String name;
   private ProcessorContext context;
@@ -26,18 +31,19 @@ public class HazelcastKeyValueStore implements KeyValueStore<Bytes, byte[]> {
   private boolean open;
   private IMap<byte[], byte[]> map;
 
-  private static <T> Supplier<T> memoize(Supplier<T> provider) {
-    ConcurrentHashMap<Object, T> map = new ConcurrentHashMap<>();
-    return () -> map.computeIfAbsent("instance", k -> provider.get());
+  private static Supplier<HazelcastInstance> memoize(Supplier<HazelcastInstance> provider, String name) {
+    ConcurrentHashMap<String, HazelcastInstance> map = new ConcurrentHashMap<>();
+    return () -> map.computeIfAbsent(name, k -> provider.get());
   }
 
   HazelcastKeyValueStore(String name, HazelcastProvider hazelcastProvider) {
     this.name = name;
-    this.hazelcastInstance = memoize(hazelcastProvider::create);
+    this.hazelcastInstance = memoize(hazelcastProvider::create, name);
   }
 
 
-  static class HazelcastBatchingRestoreCallback extends AbstractNotifyingBatchingRestoreCallback {
+  private static class HazelcastBatchingRestoreCallback extends
+      AbstractNotifyingBatchingRestoreCallback {
 
     private final HazelcastKeyValueStore hazelcastKeyValueStore;
 
@@ -57,16 +63,14 @@ public class HazelcastKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    public void onRestoreStart(final TopicPartition topicPartition,
-        final String storeName,
+    public void onRestoreStart(final TopicPartition topicPartition, final String storeName,
         final long startingOffset,
         final long endingOffset) {
       // do nothing
     }
 
     @Override
-    public void onRestoreEnd(final TopicPartition topicPartition,
-        final String storeName,
+    public void onRestoreEnd(final TopicPartition topicPartition, final String storeName,
         final long totalRestored) {
       // do nothing
     }
@@ -82,18 +86,16 @@ public class HazelcastKeyValueStore implements KeyValueStore<Bytes, byte[]> {
   public void init(ProcessorContext context, StateStore root) {
     this.open = true;
     HazelcastInstance instance = this.hazelcastInstance.get();
-    if (instance != null && instance.getLifecycleService().isRunning()) {
-      if (root != null) {
-        context.register(root, false, new HazelcastBatchingRestoreCallback(this));
-        this.context = context;
-        map = hazelcastInstance.get().getMap(name);
-      }
+    if (instance != null && instance.getLifecycleService().isRunning() && root != null) {
+      context.register(root, false, new HazelcastBatchingRestoreCallback(this));
+      this.context = context;
+      map = hazelcastInstance.get().getMap(name);
     }
   }
 
   @Override
   public void flush() {
-    hazelcastInstance.get().getMap("test").flush();
+
   }
 
   @Override
@@ -157,5 +159,44 @@ public class HazelcastKeyValueStore implements KeyValueStore<Bytes, byte[]> {
       return from.compareTo(bytes) <= 0 && bytes.compareTo(to) <= 0;
     };
   }
+
+
+  private class HazelcastKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
+
+    private final Iterator<Entry<byte[], byte[]>> iterator;
+    private final AtomicBoolean closed = new AtomicBoolean();
+    private boolean isDone = false;
+
+    HazelcastKeyValueIterator(Iterator<Entry<byte[], byte[]>> iterator) {
+      this.iterator = iterator;
+    }
+
+    @Override
+    public void close() {
+      closed.set(true);
+      isDone = true;
+    }
+
+    @Override
+    public Bytes peekNextKey() {
+      throw new UnsupportedOperationException("peekNextKey() is not supported");
+    }
+
+    @Override
+    public boolean hasNext() {
+      return iterator.hasNext();
+    }
+
+    @Override
+    public KeyValue<Bytes, byte[]> next() {
+      if (!hasNext()) {
+        throw new NoSuchElementException("no more element");
+      }
+      final Entry<byte[], byte[]> next = iterator.next();
+      final Bytes parsedKey = Bytes.wrap(next.getKey());
+      return KeyValue.pair(parsedKey, next.getValue());
+    }
+  }
+
 
 }

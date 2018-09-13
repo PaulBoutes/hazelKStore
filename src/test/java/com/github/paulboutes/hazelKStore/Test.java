@@ -1,21 +1,20 @@
 package com.github.paulboutes.hazelKStore;
 
+import com.github.paulboutes.hazelKStore.hazelcast.HazelcastProvider;
+import com.github.paulboutes.hazelKStore.state.HazelcastStore;
+import com.hazelcast.client.config.ClientConfig;
+import com.hazelcast.client.config.ClientNetworkConfig;
+import com.hazelcast.config.GroupConfig;
 import java.util.Properties;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.QueryableStoreTypes;
-import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
 
 public class Test {
@@ -40,9 +39,21 @@ public class Test {
     props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
     props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
     props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-    props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+    props.put(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG, 5000);
+    props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 2000);
 
     final StreamsBuilder builder = new StreamsBuilder();
+
+    final ClientConfig clientConfig = new ClientConfig();
+
+    final ClientNetworkConfig networkConfig = new ClientNetworkConfig();
+    networkConfig.addAddress("dbpp-hazel01.cultura.intra:5701");
+    clientConfig.setNetworkConfig(networkConfig);
+
+    final GroupConfig groupConfig = new GroupConfig();
+    groupConfig.setName("preprod");
+    groupConfig.setPassword("QqTm3AsCwHpnMxv3");
+    clientConfig.setGroupConfig(groupConfig);
 
     final KStream<String, String> kStream = builder
         .stream("foo", Consumed.with(Serdes.String(), Serdes.String()));
@@ -53,7 +64,8 @@ public class Test {
             () -> 0,
             (key, value, aggregate) -> aggregate + 1,
             Materialized
-                .<String, Integer>as(new HazelcastStoreSupplier("aggre", HazelcastProvider.defaultClient()))
+                .<String, Integer>as(
+                    HazelcastStore.storeSupplier("test-kafka", HazelcastProvider.of(clientConfig)))
                 .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.Integer())
         );
@@ -63,14 +75,6 @@ public class Test {
         .foreach((k, v) -> System.out.println("(" + k + " -> " + v + ")"));
 
     KafkaStreams streams = new KafkaStreams(builder.build(), new StreamsConfig(props));
-
-    streams.setStateListener((newState, oldState) -> {
-      if (newState.equals(State.RUNNING) && oldState.equals(State.REBALANCING)) {
-        final ReadOnlyKeyValueStore<String, Integer> readOnlyKeyValueStore = streams
-            .store("aggre", QueryableStoreTypes.keyValueStore());
-        readOnlyKeyValueStore.all().forEachRemaining(kv -> System.out.println("fetch from interactive ("+kv.key+" -> "+kv.value+")"));
-      }
-    });
 
     streams.cleanUp();
     streams.start();

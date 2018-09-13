@@ -1,5 +1,7 @@
 package com.github.paulboutes.hazelKStore;
 
+import com.github.paulboutes.hazelKStore.hazelcast.HazelcastProvider;
+import com.github.paulboutes.hazelKStore.state.HazelcastStore;
 import java.util.Properties;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
@@ -10,7 +12,6 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.Stores;
 
 public class TestLow {
 
@@ -24,11 +25,12 @@ public class TestLow {
     props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
     props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
 
-    final StoreBuilder<KeyValueStore<String, Integer>> test = Stores.keyValueStoreBuilder(
-        new HazelcastStoreSupplier("testlow", HazelcastProvider.defaultClient()),
-        Serdes.String(),
-        Serdes.Integer()
-    );
+    final StoreBuilder<KeyValueStore<String, Integer>> test = HazelcastStore
+        .<String, Integer>builder("testlow")
+        .keySerde(Serdes.String())
+        .valueSerde(Serdes.Integer())
+        .provider(HazelcastProvider.localClient())
+        .storeBuilder();
 
     final Topology topology = new Topology();
 

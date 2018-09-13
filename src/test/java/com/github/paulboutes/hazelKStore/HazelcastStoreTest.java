@@ -9,11 +9,7 @@ class HazelcastStoreTest {
 
   @Test
   void shouldCreateHazelcastStoreBuilderInstance() {
-    HazelcastKeyValueStoreFactory<String, Integer> storeBuilder = HazelcastStore
-        .of("test-store");
 
-    assertThat(storeBuilder).isNotNull();
-    assertThat(storeBuilder.name()).isEqualTo("test-store");
   }
 
   @Test

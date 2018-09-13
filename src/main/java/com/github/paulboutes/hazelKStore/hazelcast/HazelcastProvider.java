@@ -1,4 +1,4 @@
-package com.github.paulboutes.hazelKStore;
+package com.github.paulboutes.hazelKStore.hazelcast;
 
 import com.hazelcast.client.HazelcastClient;
 import com.hazelcast.client.config.ClientConfig;
@@ -13,11 +13,10 @@ public interface HazelcastProvider {
     return () -> HazelcastClient.newHazelcastClient(clientConfig);
   }
 
-  static HazelcastProvider defaultClient() {
+  static HazelcastProvider localClient() {
     ClientConfig clientConfig = new ClientConfig();
-    clientConfig.setProperty("hazelcast.logging.type", "slf4j");
     clientConfig.getNetworkConfig().addAddress("127.0.0.1:5701");
-    return () -> HazelcastClient.newHazelcastClient(clientConfig);
+    return of(clientConfig);
   }
 
 }
